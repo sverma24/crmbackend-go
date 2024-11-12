@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Customer struct {
@@ -18,11 +19,15 @@ type Customer struct {
 	Contacted bool   `json:"contacted"`
 }
 
-var customers = []Customer{
-	{Id: 1, Name: "John Doe", Role: "Admin", Email: "john@example.com", Phone: "1234567890", Contacted: false},
-	{Id: 2, Name: "Jane Smith", Role: "User", Email: "jane@example.com", Phone: "0987654321", Contacted: true},
-	{Id: 3, Name: "Alice Brown", Role: "Manager", Email: "alice@example.com", Phone: "1112223333", Contacted: false},
-}
+var (
+	customers = []Customer{
+		{Id: 1, Name: "John Doe", Role: "Admin", Email: "john@example.com", Phone: "1234567890", Contacted: false},
+		{Id: 2, Name: "Jane Smith", Role: "User", Email: "jane@example.com", Phone: "0987654321", Contacted: true},
+		{Id: 3, Name: "Alice Brown", Role: "Manager", Email: "alice@example.com", Phone: "1112223333", Contacted: false},
+	}
+	mu     sync.Mutex
+	nextID = 4 // Start from 4 since you already have IDs 1, 2, and 3
+)
 
 // Helper function to find a customer by ID
 func findCustomerById(id int) (*Customer, int) {
@@ -61,7 +66,6 @@ func getCustomer(w http.ResponseWriter, r *http.Request) {
 
 // Handler to add a new customer
 func addCustomer(w http.ResponseWriter, r *http.Request) {
-	// Use ioutil.ReadAll to read the request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
@@ -69,28 +73,27 @@ func addCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// Unmarshal the JSON data into a Customer struct
 	var newCustomer Customer
 	if err := json.Unmarshal(body, &newCustomer); err != nil {
 		http.Error(w, "Invalid JSON format", http.StatusBadRequest)
 		return
 	}
 
-	// Check if the provided ID already exists
-	for _, customer := range customers {
-		if customer.Id == newCustomer.Id {
-			http.Error(w, fmt.Sprintf("Customer with ID %d already exists", newCustomer.Id), http.StatusConflict)
-			return
-		}
-	}
+	// Lock to ensure thread-safe ID assignment and slice modification
+	mu.Lock()
+	defer mu.Unlock()
 
-	// Add the new customer to the customers slice
+	// Assign a unique ID automatically
+	newCustomer.Id = nextID
+	nextID++
+
+	// Add the new customer to the list
 	customers = append(customers, newCustomer)
 
-	// Return the newly added customer with a 201 Created status
+	// Respond with the newly added customer
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(newCustomer)
+	json.NewEncoder(w).Encode(customers)
 }
 
 // Handler to update an existing customer

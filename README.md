@@ -102,7 +102,6 @@ This is a **CRM Backend API** written in Go. It provides a RESTful service to ma
 - **Request Body** (JSON):
   ```json
   {
-    "id": 4,
     "name": "Bob Marley",
     "role": "User",
     "email": "bob@example.com",
